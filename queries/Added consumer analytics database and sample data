@@ -1,0 +1,230 @@
+USE ConsumerAnalytics;
+GO
+
+--------------------------------------------------
+-- 1. Total sales per product
+--------------------------------------------------
+SELECT p.product_name,
+       SUM(t.quantity * p.price) AS total_sales
+FROM transactions t
+JOIN products p ON t.product_id = p.product_id
+GROUP BY p.product_name
+ORDER BY total_sales DESC;
+
+--------------------------------------------------
+-- 2. Total sales per category
+--------------------------------------------------
+SELECT c.category_name,
+       SUM(t.quantity * p.price) AS total_sales
+FROM transactions t
+JOIN products p ON t.product_id = p.product_id
+JOIN categories c ON p.category_id = c.category_id
+GROUP BY c.category_name
+ORDER BY total_sales DESC;
+
+--------------------------------------------------
+-- 3. Total sales per customer
+--------------------------------------------------
+SELECT cu.customer_name,
+       SUM(t.quantity * p.price) AS total_sales
+FROM transactions t
+JOIN customers cu ON t.customer_id = cu.customer_id
+JOIN products p ON t.product_id = p.product_id
+GROUP BY cu.customer_name
+ORDER BY total_sales DESC;
+
+--------------------------------------------------
+-- 4. Top 5 selling products
+--------------------------------------------------
+SELECT TOP 5 p.product_name,
+       SUM(t.quantity) AS total_units_sold
+FROM transactions t
+JOIN products p ON t.product_id = p.product_id
+GROUP BY p.product_name
+ORDER BY total_units_sold DESC;
+
+--------------------------------------------------
+-- 5. Sales per country
+--------------------------------------------------
+SELECT cu.country,
+       SUM(t.quantity * p.price) AS total_sales
+FROM transactions t
+JOIN customers cu ON t.customer_id = cu.customer_id
+JOIN products p ON t.product_id = p.product_id
+GROUP BY cu.country
+ORDER BY total_sales DESC;
+
+--------------------------------------------------
+-- 6. Average purchase value per customer
+--------------------------------------------------
+SELECT cu.customer_name,
+       AVG(t.quantity * p.price) AS avg_purchase_value
+FROM transactions t
+JOIN customers cu ON t.customer_id = cu.customer_id
+JOIN products p ON t.product_id = p.product_id
+GROUP BY cu.customer_name
+ORDER BY avg_purchase_value DESC;
+
+--------------------------------------------------
+-- 7. Total quantity sold per category
+--------------------------------------------------
+SELECT c.category_name,
+       SUM(t.quantity) AS total_quantity
+FROM transactions t
+JOIN products p ON t.product_id = p.product_id
+JOIN categories c ON p.category_id = c.category_id
+GROUP BY c.category_name
+ORDER BY total_quantity DESC;
+
+--------------------------------------------------
+-- 8. Customer purchase ranking
+--------------------------------------------------
+SELECT cu.customer_name,
+       SUM(t.quantity * p.price) AS total_sales,
+       RANK() OVER (ORDER BY SUM(t.quantity * p.price) DESC) AS sales_rank
+FROM transactions t
+JOIN customers cu ON t.customer_id = cu.customer_id
+JOIN products p ON t.product_id = p.product_id
+GROUP BY cu.customer_name
+ORDER BY sales_rank;
+
+--------------------------------------------------
+-- 9. Monthly sales trend
+--------------------------------------------------
+SELECT FORMAT(transaction_date,'yyyy-MM') AS month,
+       SUM(t.quantity * p.price) AS total_sales
+FROM transactions t
+JOIN products p ON t.product_id = p.product_id
+GROUP BY FORMAT(transaction_date,'yyyy-MM')
+ORDER BY month;
+
+--------------------------------------------------
+-- 10. Products sold above average
+--------------------------------------------------
+SELECT p.product_name,
+       SUM(t.quantity) AS total_units
+FROM transactions t
+JOIN products p ON t.product_id = p.product_id
+GROUP BY p.product_name
+HAVING SUM(t.quantity) > (
+    SELECT AVG(total_quantity) FROM (
+        SELECT SUM(quantity) AS total_quantity
+        FROM transactions
+        GROUP BY product_id
+    ) AS sub
+)
+ORDER BY total_units DESC;
+
+--------------------------------------------------
+-- 11. Top customers by category
+--------------------------------------------------
+WITH customer_category AS (
+    SELECT cu.customer_name,
+           c.category_name,
+           SUM(t.quantity * p.price) AS total_sales,
+           RANK() OVER (PARTITION BY c.category_name ORDER BY SUM(t.quantity * p.price) DESC) AS rnk
+    FROM transactions t
+    JOIN customers cu ON t.customer_id = cu.customer_id
+    JOIN products p ON t.product_id = p.product_id
+    JOIN categories c ON p.category_id = c.category_id
+    GROUP BY cu.customer_name, c.category_name
+)
+SELECT customer_name, category_name, total_sales
+FROM customer_category
+WHERE rnk = 1;
+
+--------------------------------------------------
+-- 12. Highest revenue product per category
+--------------------------------------------------
+WITH ranked_products AS (
+    SELECT p.product_name,
+           c.category_name,
+           SUM(t.quantity * p.price) AS total_sales,
+           RANK() OVER (PARTITION BY c.category_name ORDER BY SUM(t.quantity * p.price) DESC) AS rnk
+    FROM transactions t
+    JOIN products p ON t.product_id = p.product_id
+    JOIN categories c ON p.category_id = c.category_id
+    GROUP BY p.product_name, c.category_name
+)
+SELECT product_name, category_name, total_sales
+FROM ranked_products
+WHERE rnk = 1;
+
+--------------------------------------------------
+-- 13. Total transactions per customer
+--------------------------------------------------
+SELECT cu.customer_name,
+       COUNT(t.transaction_id) AS total_transactions
+FROM transactions t
+JOIN customers cu ON t.customer_id = cu.customer_id
+GROUP BY cu.customer_name
+ORDER BY total_transactions DESC;
+
+--------------------------------------------------
+-- 14. Customer gender analysis
+--------------------------------------------------
+SELECT gender,
+       SUM(t.quantity * p.price) AS total_sales
+FROM transactions t
+JOIN customers cu ON t.customer_id = cu.customer_id
+JOIN products p ON t.product_id = p.product_id
+GROUP BY gender
+ORDER BY total_sales DESC;
+
+--------------------------------------------------
+-- 15. Average units per transaction
+--------------------------------------------------
+SELECT AVG(quantity) AS avg_units_per_transaction
+FROM transactions;
+
+--------------------------------------------------
+-- 16. Products never purchased
+--------------------------------------------------
+SELECT p.product_name
+FROM products p
+LEFT JOIN transactions t ON p.product_id = t.product_id
+WHERE t.product_id IS NULL;
+
+--------------------------------------------------
+-- 17. Total sales per product per country
+--------------------------------------------------
+SELECT p.product_name,
+       cu.country,
+       SUM(t.quantity * p.price) AS total_sales
+FROM transactions t
+JOIN products p ON t.product_id = p.product_id
+JOIN customers cu ON t.customer_id = cu.customer_id
+GROUP BY p.product_name, cu.country
+ORDER BY total_sales DESC;
+
+--------------------------------------------------
+-- 18. Total revenue by category
+--------------------------------------------------
+SELECT c.category_name,
+       SUM(t.quantity * p.price) AS total_revenue
+FROM transactions t
+JOIN products p ON t.product_id = p.product_id
+JOIN categories c ON p.category_id = c.category_id
+GROUP BY c.category_name
+ORDER BY total_revenue DESC;
+
+--------------------------------------------------
+-- 19. Highest purchase value transaction
+--------------------------------------------------
+SELECT t.transaction_id,
+       cu.customer_name,
+       t.quantity * p.price AS transaction_value
+FROM transactions t
+JOIN customers cu ON t.customer_id = cu.customer_id
+JOIN products p ON t.product_id = p.product_id
+ORDER BY transaction_value DESC;
+
+--------------------------------------------------
+-- 20. Customer purchase frequency
+--------------------------------------------------
+SELECT cu.customer_name,
+       COUNT(t.transaction_id) AS purchase_count
+FROM transactions t
+JOIN customers cu ON t.customer_id = cu.customer_id
+GROUP BY cu.customer_name
+ORDER BY purchase_count DESC;
